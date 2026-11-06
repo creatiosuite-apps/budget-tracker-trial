@@ -321,11 +321,21 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // UNIFIED FORM SUBMISSION (Optimized for Offline & Instant Speed)
+  // ==========================================
+  // 1. UNIFIED FORM SUBMISSION & LIMIT
+  // ==========================================
   const transactionForm = document.getElementById('transaction-form');
   if (transactionForm) {
     transactionForm.addEventListener('submit', async (e) => {
       e.preventDefault();
+
+      // --- 1. TRIAL LIMIT CHECK ---
+      const maxTrialTransactions = 10; // Changed back to 10
+      if (globalTransactions.length >= maxTrialTransactions) {
+          alert("Trial Limit Reached! 🚀\n\nYou've logged 10 transactions. Upgrade to the full version of the Budget Tracker to unlock unlimited tracking.");
+          return; // Instantly stops the save process
+      }
+      
       const btn = document.getElementById('trans-submit-btn');
       const originalText = btn.innerText;
       btn.innerText = "Saving...";
@@ -339,36 +349,52 @@ document.addEventListener("DOMContentLoaded", () => {
       const transDesc = document.getElementById('trans-desc') ? document.getElementById('trans-desc').value : '';
       const newId = Date.now().toString();
 
-      const payload = {
-        action: 'add',
-        id: newId,
-        type: transType,
-        date: transDate,
-        amount: transAmount,
-        category: transCategory,
-        description: transDesc,
-        account: transAccount
-      };
-
-      // 1. INSTANT LOCAL UPDATE
+      // 2. INSTANT LOCAL UPDATE
       globalTransactions.push({ ID: newId, Type: transType, Date: transDate, Amount: transAmount, Category: transCategory, Description: transDesc, Account: transAccount });
       localStorage.setItem('budget_app_transactions', JSON.stringify(globalTransactions));
 
-      // 2. RESET FORM & REDIRECT
+      // 3. RESET FORM & REDIRECT
       transactionForm.reset();
       document.getElementById('trans-date').value = new Date().toISOString().split('T')[0];
       const homeBtn = document.querySelector('.nav-btn[data-target="dashboard-page"]');
       if (homeBtn) homeBtn.click();
 
-      // 3. REDRAW UI
+      // 4. REDRAW UI
       processAndRenderDashboard();
 
       btn.innerText = originalText;
       btn.disabled = false;
-
-      // 4. OFFLINE QUEUE
-      queueAndSync(payload);
     });
+  }
+
+  // ==========================================
+  // 2. TRIAL VERSION PREMIUM LOCKS
+  // ==========================================
+  // Lock the Bills form/button
+  const addBillBtn = document.getElementById('add-bill-btn');
+  if (addBillBtn) {
+      addBillBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          alert("Premium Feature! 🔒\n\nUpgrade to the Pro version to automate your recurring bills and subscriptions.");
+      });
+  }
+
+  // Lock the Debt form/button
+  const addDebtBtn = document.getElementById('add-debt-btn');
+  if (addDebtBtn) {
+      addDebtBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          alert("Premium Feature! 🔒\n\nUpgrade to the Pro version to unlock the avalanche and snowball debt payoff simulators.");
+      });
+  }
+
+  // Lock the Goals form/button
+  const addGoalBtn = document.getElementById('add-goal-btn');
+  if (addGoalBtn) {
+      addGoalBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          alert("Premium Feature! 🔒\n\nUpgrade to the Pro version to track your visual savings goals.");
+      });
   }
 
   // Update Budget Form Listener to save with month key
@@ -436,24 +462,8 @@ if (budgetForm) {
 
 // --- CORE UTILITY FUNCTIONS ---
 function queueAndSync(payload) {
-  let pendingQueue = JSON.parse(localStorage.getItem('pending_transactions') || '[]');
-  pendingQueue.push(payload);
-  localStorage.setItem('pending_transactions', JSON.stringify(pendingQueue));
-  if (typeof syncPendingTransactions === 'function') syncPendingTransactions();
-}
-
-function deleteTransaction(id) {
-  if (!confirm('Are you sure you want to delete this?')) return;
-  
-  // 1. Force both to strings to fix the Google Sheets Number/String mismatch
-  globalTransactions = globalTransactions.filter(t => String(t.ID) !== String(id));
-  localStorage.setItem('budget_app_transactions', JSON.stringify(globalTransactions));
-
-  // 2. Fire to Offline Queue immediately
-  queueAndSync({ action: 'delete', id: String(id) });
-
-  // 3. Instantly update UI 
-  processAndRenderDashboard(); 
+  // Disabled for Trial Version
+  return;
 }
 
 function formatAppDate(dateString) {
@@ -1750,49 +1760,10 @@ function renderDashboardSparkline() {
   `;
 }
 
-// --- 12. OFFLINE SYNC ENGINE (Race-Condition Fixed) ---
-let isSyncing = false; // Prevents overlapping syncs
-
+// --- 12. OFFLINE SYNC ENGINE ---
 async function syncPendingTransactions() {
-  // Abort if offline, already syncing, or no URL provided
-  if (!navigator.onLine || isSyncing || !SCRIPT_URL) return; 
-
-  let pending = JSON.parse(localStorage.getItem('pending_transactions') || '[]');
-  if (pending.length === 0) return;
-
-  isSyncing = true; // Lock the sync process
-  
-  // Clear the local queue IMMEDIATELY so new clicks don't grab these items again
-  localStorage.setItem('pending_transactions', JSON.stringify([]));
-  
-  console.log(`Syncing ${pending.length} offline transactions to Google Sheets...`);
-  let failed = [];
-
-  for (let tx of pending) {
-    try {
-      await fetch(SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(tx)
-      });
-    } catch (error) {
-      console.error("Network drop during sync. Retaining in queue.", error);
-      failed.push(tx); 
-    }
-  }
-  
-  // If any failed due to network drop, put them back into the queue
-  if (failed.length > 0) {
-    let currentQueue = JSON.parse(localStorage.getItem('pending_transactions') || '[]');
-    localStorage.setItem('pending_transactions', JSON.stringify([...failed, ...currentQueue]));
-  }
-  
-  isSyncing = false; // Unlock the sync process
-  
-  // If new transactions were added while we were syncing, run it again instantly
-  const newPending = JSON.parse(localStorage.getItem('pending_transactions') || '[]');
-  if (newPending.length > 0) syncPendingTransactions();
+  // Disabled for Trial Version
+  return;
 }
 
 window.addEventListener('load', syncPendingTransactions);
@@ -3517,82 +3488,11 @@ function exportLocalData() {
 
 // --- MANUAL CLOUD SYNC ---
 async function syncFromCloud() {
-  const scriptUrl = document.getElementById('set-url').value;
-  if (!scriptUrl) {
-    alert("Please set your Google Web App URL in the Settings tab first.");
-    return;
-  }
-  
-  const btn = document.getElementById('cloud-sync-btn');
-  if (btn) btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
-  
-  try {
-    const cacheBusterUrl = scriptUrl + (scriptUrl.includes('?') ? '&' : '?') + 't=' + new Date().getTime();
-    const response = await fetch(cacheBusterUrl, { cache: 'no-store' });
-    const data = await response.json();
-    
-    if (data.transactions && data.transactions.length > 0) {
-      localStorage.setItem('budget_app_transactions', JSON.stringify(data.transactions));
-    }
-    
-    if (data.settings) {
-      const localMemory = JSON.parse(localStorage.getItem('budgetSettings')) || {};
-      const protectedName = localMemory.name || ''; 
-      
-      const mergedSettings = { ...data.settings, name: protectedName };
-      
-      // NEW: Wipe stale JSON budgets and rebuild them strictly from the Budgets tab data
-      mergedSettings.budgets = {}; 
-      if (data.budgets && data.budgets.length > 0) {
-        data.budgets.forEach(b => {
-          if (!mergedSettings.budgets[b.Month]) mergedSettings.budgets[b.Month] = {};
-          mergedSettings.budgets[b.Month][b.Category] = b.Limit;
-        });
-      }
-      
-      localStorage.setItem('budgetSettings', JSON.stringify(mergedSettings));
-
-      // NEW: Bridge the gap between cloud settings and local debt memory
-      if (data.settings.debtExtraPayment !== undefined) {
-        const localDebtSettings = JSON.parse(localStorage.getItem('debtSettings')) || { strategy: 'avalanche', extra: 0 };
-        localDebtSettings.extra = data.settings.debtExtraPayment;
-        localStorage.setItem('debtSettings', JSON.stringify(localDebtSettings));
-      }
-    }
-    
-    window.location.reload(); 
-  } catch (error) {
-    console.error(error);
-    alert("Sync failed. Check your internet connection or URL.");
-  } finally {
-    if (btn) btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down"></i>';
-  }
+  alert("Cloud Sync is locked in the Trial version! 🔒\n\nUpgrade to Pro to backup your data to Google Sheets and sync across all your devices.");
 }
 
 // --- SYNC SETTINGS TO CLOUD ---
 async function pushSettingsToCloud() {
-  const scriptUrl = document.getElementById('set-url').value;
-  if (!scriptUrl) return; 
-  
-  const extraDebtInput = document.getElementById('debt-extra-payment');
-  if (extraDebtInput) {
-    userSettings.debtExtraPayment = parseFloat(extraDebtInput.value) || 0;
-  }
-
-  // Use JSON parse/stringify for a true deep clone, breaking the reference
-  const cloudSettings = JSON.parse(JSON.stringify(userSettings));
-  delete cloudSettings.name;
-  delete cloudSettings.budgets; // This will now fully remove the budgets from the payload
-
-  try {
-    await fetch(scriptUrl, {
-      method: 'POST',
-      body: JSON.stringify({
-        action: 'syncSettings',
-        settings: cloudSettings
-      })
-    });
-  } catch(e) {
-    console.error("Failed to sync settings to cloud.");
-  }
+  // Disabled for Trial Version
+  return;
 }
