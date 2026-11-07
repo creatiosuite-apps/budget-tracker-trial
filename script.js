@@ -2307,21 +2307,24 @@ function renderDebtPage() {
       simDebts.sort((a, b) => a.balance - b.balance); // Lowest Balance First
     }
 
-    // 1. Accrue Interest & Process Min Payments
+    // 1. Accrue Interest & Process Min Payments (Inside your while loop)
     simDebts.forEach(d => {
       if (d.balance > 0) {
         const interest = d.balance * (d.apr / 100 / 12);
         d.balance += interest;
-        d.interestPaid += interest; // NEW: Track individual interest
+        d.interestPaid += interest; 
         totalInterestPaid += interest;
 
         if (d.balance <= d.min) {
           overflow += (d.min - d.balance); 
           d.balance = 0;
-          if (d.payoffMonth === 0) d.payoffMonth = monthsPassed; // NEW: Record individual payoff month
+          if (d.payoffMonth === 0) d.payoffMonth = monthsPassed; 
         } else {
           d.balance -= d.min;
         }
+      } else {
+        // FIX: Roll the minimum payment of cleared debts into the snowball
+        overflow += d.min;
       }
     });
 
